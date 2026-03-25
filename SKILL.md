@@ -358,6 +358,8 @@ python3 "$SKILL_DIR/scripts/office/unpack.py" document.hwpx ./unpacked/
 10. **구조 변경 제한**: 사용자 요청 없이 문단/표의 추가·삭제·분할·병합 금지
 11. **build_hwpx.py 우선**: 새 문서 생성은 build_hwpx.py 사용
 12. **빈 줄**: `<hp:t/>` 사용 (self-closing tag)
+13. **linesegarray 제거 (필수)**: 텍스트를 프로그래밍으로 삽입/변경할 때 반드시 `hp:linesegarray`를 모두 제거해야 한다. 이것은 한글의 줄 배치 캐시로, 원본 양식의 빈 셀 캐시가 남아있으면 긴 텍스트가 1줄로 렌더링되면서 **글자가 중첩되는 치명적 현상** 발생. 제거하면 한글이 열 때 자동 재계산. 코드: `for lsa in element.findall('.//hp:linesegarray', ns): lsa.getparent().remove(lsa)`
+14. **표 pageBreak 설정**: 내용이 많아 페이지를 넘어가는 표는 `pageBreak="CELL"`로 설정. `"TABLE"`이면 표 전체가 한 페이지에 안 들어갈 때 잘리거나 다음 페이지로 통째로 넘어감
 
 ---
 
@@ -375,5 +377,8 @@ python3 "$SKILL_DIR/scripts/office/unpack.py" document.hwpx ./unpacked/
 | `scripts/text_extract.py` | E | 텍스트 추출 (python-hwpx 필요) |
 | `scripts/create_document.py` | D | Markdown/JSON → HWPX 간편 생성 |
 | `scripts/postprocess_hwpx.py` | A/B | **HWPX 후처리 (필수)** — 표 너비/열 비율, 문단 간격, 빈 줄, 셀 높이 |
+| `scripts/md_to_hwpx_form2.py` | D | **MD → HWPX 서식2(도전적 문제 정의서)** — 레퍼런스 기반 표 구조 복원 + linesegarray 제거 |
+| `scripts/md_to_docx.py` | — | MD → DOCX 서식1(Concept Paper) 변환 |
+| `scripts/md_to_docx_form2.py` | — | MD → DOCX 서식2(도전적 문제 정의서) 변환 |
 | `scripts/office/unpack.py` | C/E | HWPX → XML 디렉토리 |
 | `scripts/office/pack.py` | C | XML 디렉토리 → HWPX |
