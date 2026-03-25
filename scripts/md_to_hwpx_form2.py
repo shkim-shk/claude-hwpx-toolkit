@@ -94,8 +94,154 @@ def parse_inline(text):
     return runs if runs else [(CHARPR_BODY, text)]
 
 
+def make_nested_tbl(rows_data, parent_cell_width=38837):
+    """셀 내부에 HWPX 중첩 표를 생성하여 해당 표를 포함하는 문단(hp:p)을 반환.
+
+    rows_data: [[col1, col2, ...], ...] 형태의 2D 리스트
+    parent_cell_width: 부모 셀 너비 (HWPUNIT). 셀 내부 여백 제외 후 표 너비 결정.
+
+    HWPX 중첩 표 구조:
+      hp:p > hp:run > hp:tbl > hp:tr > hp:tc > hp:subList > hp:p > hp:run > hp:t
+    """
+    HP = 'http://www.hancom.co.kr/hwpml/2011/paragraph'
+
+    if not rows_data or not rows_data[0]:
+        return None
+
+    num_cols = len(rows_data[0])
+    num_rows = len(rows_data)
+    # 표 너비: 부모 셀 너비에서 좌우 여백 제외
+    tbl_width = parent_cell_width - 566
+    col_width = tbl_width // num_cols
+    row_height = 1600  # 기본 행 높이
+
+    # borderFill ID 참조: 9 = 0.12mm SOLID 사방
+    BORDER_FILL_CELL = "9"
+    BORDER_FILL_HEADER = "10"  # 헤더용 (2B5686 배경)
+
+    # 문단 생성 (표를 감싸는)
+    wrapper_p = etree.Element(f'{{{HP}}}p')
+    wrapper_p.set('id', '0')
+    wrapper_p.set('paraPrIDRef', PARAPR_BODY)
+    wrapper_p.set('styleIDRef', '0')
+    wrapper_p.set('pageBreak', '0')
+    wrapper_p.set('columnBreak', '0')
+    wrapper_p.set('merged', '0')
+
+    wrapper_run = etree.SubElement(wrapper_p, f'{{{HP}}}run')
+    wrapper_run.set('charPrIDRef', CHARPR_BODY)
+
+    # tbl 요소
+    tbl = etree.SubElement(wrapper_run, f'{{{HP}}}tbl')
+    tbl.set('pageBreak', 'CELL')
+    tbl.set('repeatHeader', '0')
+    tbl.set('rowCnt', str(num_rows))
+    tbl.set('colCnt', str(num_cols))
+    tbl.set('cellSpacing', '0')
+    tbl.set('borderFillIDRef', BORDER_FILL_CELL)
+
+    # sz (표 전체 크기)
+    total_height = row_height * num_rows
+    sz = etree.SubElement(tbl, f'{{{HP}}}sz')
+    sz.set('width', str(tbl_width))
+    sz.set('height', str(total_height))
+    sz.set('widthRelTo', 'absolute')
+    sz.set('heightRelTo', 'absolute')
+    sz.set('hasWidth', '1')
+    sz.set('hasHeight', '0')
+    sz.set('protect', '0')
+
+    # pos (위치 — inline)
+    pos = etree.SubElement(tbl, f'{{{HP}}}pos')
+    pos.set('treatAsChar', '1')
+    pos.set('affectLSpacing', '0')
+    pos.set('flowWithText', '1')
+    pos.set('allowOverlap', '0')
+    pos.set('holdAnchorAndSO', '0')
+    pos.set('vertRelTo', 'para')
+    pos.set('horzRelTo', 'para')
+    pos.set('vertAlign', 'top')
+    pos.set('horzAlign', 'left')
+    pos.set('vertOffset', '0')
+    pos.set('horzOffset', '0')
+
+    # margin
+    outMargin = etree.SubElement(tbl, f'{{{HP}}}outMargin')
+    outMargin.set('left', '0')
+    outMargin.set('right', '0')
+    outMargin.set('top', '141')
+    outMargin.set('bottom', '141')
+
+    # 각 행/셀 생성
+    for ri, row in enumerate(rows_data):
+        tr = etree.SubElement(tbl, f'{{{HP}}}tr')
+
+        for ci, cell_text in enumerate(row):
+            is_header = (ri == 0)
+            tc = etree.SubElement(tr, f'{{{HP}}}tc')
+            tc.set('name', '')
+            tc.set('header', '1' if is_header else '0')
+            tc.set('hasMargin', '1')
+            tc.set('protect', '0')
+            tc.set('editable', '0')
+            tc.set('dirty', '0')
+            tc.set('colAddr', str(ci))
+            tc.set('rowAddr', str(ri))
+            tc.set('colSpan', '1')
+            tc.set('rowSpan', '1')
+
+            # cellAddr
+            ca = etree.SubElement(tc, f'{{{HP}}}cellAddr')
+            ca.set('colAddr', str(ci))
+            ca.set('rowAddr', str(ri))
+
+            # cellSz
+            csz = etree.SubElement(tc, f'{{{HP}}}cellSz')
+            csz.set('width', str(col_width))
+            csz.set('height', str(row_height))
+
+            # cellMargin
+            cm = etree.SubElement(tc, f'{{{HP}}}cellMargin')
+            cm.set('left', '142')
+            cm.set('right', '142')
+            cm.set('top', '71')
+            cm.set('bottom', '71')
+
+            # borderFill
+            bf_id = BORDER_FILL_CELL
+            tc.set('borderFillIDRef', bf_id)
+
+            # subList > p > run > t
+            sl = etree.SubElement(tc, f'{{{HP}}}subList')
+            sl.set('id', '0')
+            sl.set('textDirection', 'HORIZONTAL')
+            sl.set('lineWrap', 'BREAK')
+            sl.set('vertAlign', 'CENTER')
+            sl.set('linkListIDRef', '0')
+            sl.set('linkListNextIDRef', '0')
+            sl.set('textWidth', str(col_width - 284))
+            sl.set('textHeight', str(row_height - 142))
+
+            p_el = etree.SubElement(sl, f'{{{HP}}}p')
+            p_el.set('id', '0')
+            p_el.set('paraPrIDRef', PARAPR_BODY)
+            p_el.set('styleIDRef', '0')
+            p_el.set('pageBreak', '0')
+            p_el.set('columnBreak', '0')
+            p_el.set('merged', '0')
+
+            run_el = etree.SubElement(p_el, f'{{{HP}}}run')
+            charpr = CHARPR_BOLD if is_header else CHARPR_BODY
+            run_el.set('charPrIDRef', charpr)
+
+            t_el = etree.SubElement(run_el, f'{{{HP}}}t')
+            t_el.text = cell_text if cell_text else ''
+
+    return wrapper_p
+
+
 def md_to_paras(content_lines, charpr_body=CHARPR_BODY, parapr_body=PARAPR_BODY):
-    """MD 섹션 내용을 HWPX 문단 리스트로 변환"""
+    """MD 섹션 내용을 HWPX 문단 리스트로 변환 (표는 중첩 표 XML로 생성)"""
     paras = []
 
     for line_data in content_lines:
@@ -122,15 +268,11 @@ def md_to_paras(content_lines, charpr_body=CHARPR_BODY, parapr_body=PARAPR_BODY)
             runs = parse_inline(text)
             paras.append(make_para(PARAPR_BODY_SPACED, runs))
         elif lt == 'table':
-            # 표 내 표는 텍스트로 표현 (HWPX 중첩 표는 복잡)
             rows = line_data.get('rows', [])
             if rows:
-                # 헤더
-                header_text = " | ".join(rows[0])
-                paras.append(make_para(parapr_body, [(CHARPR_BOLD, header_text)]))
-                for row in rows[1:]:
-                    row_text = " | ".join(row)
-                    paras.append(make_para(parapr_body, parse_inline(row_text)))
+                tbl_p = make_nested_tbl(rows)
+                if tbl_p is not None:
+                    paras.append(tbl_p)
         else:
             # 일반 본문
             runs = parse_inline(text)
@@ -469,51 +611,152 @@ def convert(md_path, output_path, reference_path):
             set_cell_text(row2_cells[1], data['contact'], charpr="19", parapr="26")
             # 개인정보 동의 O/X는 이미 원본에 있으므로 유지
 
-    # ── 표3 (본문): 10행×2열 ──
-    # 구조: Row0=섹션1, Row1=배경목적(고려사항), Row2=배경목적(입력),
-    #        Row3=목표방법(고려사항), Row4=목표방법(입력),
-    #        Row5=예상결과(고려사항), Row6=예상결과(입력),
-    #        Row7=파급효과(고려사항), Row8=파급효과(입력),
-    #        Row9=참고자료
+    # ── 표3 (본문): 양식 원본 10행×2열을 제거하고 6행×2열로 직접 생성 ──
+    # 양식 표3 조작이 한글에서 깨지므로, 표 전체를 새로 만든다.
+    # 스타일은 양식 원본의 borderFill, charPr, paraPr ID를 그대로 참조.
     if len(tables) >= 4:
-        tbl3 = tables[3]
-        trs = tbl3.findall('hp:tr', NS)
+        old_tbl3 = tables[3]
+        # old_tbl3이 포함된 run 찾기
+        old_tbl3_parent_run = old_tbl3.getparent()
 
-        # 섹션→행 매핑: 내용이 들어갈 행의 col=1 셀
-        section_row_map = {
-            "1": (0, 1),   # Row 0, Cell index 1
-            "2": (2, 0),   # Row 2, Cell index 0 (1 cell only, col=1)
-            "3": (4, 0),   # Row 4, Cell index 0
-            "4": (6, 0),   # Row 6, Cell index 0
-            "5": (8, 0),   # Row 8, Cell index 0
-            "6": (9, 1),   # Row 9, Cell index 1
-        }
+        # 섹션 라벨 정의
+        SECTION_LABELS = [
+            ("1", "정의 및 중요성", "무엇이 문제인가?"),
+            ("2", "2. 배경 및 목적", "왜 이 문제에 대한 해결을\n시도하려고 하는가?"),
+            ("3", "3. 목표 및 방법", "이 문제를 해결하기 위한\n기존의 방법과 한계는 무엇이며,\n시도하고자 하는 방법은\n어떻게 다르고 무엇을\n새롭게 제안하는가?"),
+            ("4", "4. 예상 결과", "문제를 해결할 수 있을\n것이라는 신호는\n무엇인가?"),
+            ("5", "5. 파급효과 ", "만약 성공한다면, 그\n영향은 무엇인가?"),
+            ("6", "6. 참고자료", "각 질문에 대해 입증할 수\n있는 학술 자료, 통계,\n보고서, 실험/임상 데이터,\n글로벌 기술/산업 동향\n분석 자료, 정책 자료,\n해당 분야 전문가들의\n코멘트나 추천 의견,\n미디어 및 언론 보도\n자료 링크 등"),
+        ]
 
-        for sec_key, (row_idx, cell_idx) in section_row_map.items():
-            if sec_key not in data['sections']:
-                continue
+        HP = 'http://www.hancom.co.kr/hwpml/2011/paragraph'
+        num_rows = 6
+        label_width = 8786
+        content_width = 38837
+        row_height = 4113  # 기본 행 높이 (한글이 내용에 맞게 자동 조정)
 
-            row = trs[row_idx]
-            cells = row.findall('hp:tc', NS)
+        # 양식 원본의 borderFill ID 참조
+        # 10 = 헤더 배경 (#2B5686), 24 = 라벨 배경 (#DFEAF5)
+        # 11, 12, 13, 14 = 내용 셀 테두리 변형들
+        # 25, 26, 27 = 내용 셀 테두리 변형들
+        BF_LABEL = "24"    # 라벨 셀 (연파랑 배경 #DFEAF5)
+        BF_CONTENT = "25"  # 내용 셀 (기본 테두리)
 
-            if cell_idx >= len(cells):
-                continue
+        # 새 표 생성
+        new_tbl = etree.Element(f'{{{HP}}}tbl')
+        new_tbl.set('pageBreak', 'CELL')
+        new_tbl.set('repeatHeader', '0')
+        new_tbl.set('rowCnt', str(num_rows))
+        new_tbl.set('colCnt', '2')
+        new_tbl.set('cellSpacing', '0')
+        new_tbl.set('borderFillIDRef', '9')
 
-            tc = cells[cell_idx]
-            content_lines = data['sections'][sec_key]
+        # sz — 원본 양식과 동일한 설정 (47623 = 본문 전체 폭)
+        total_width = 47623
+        sz = etree.SubElement(new_tbl, f'{{{HP}}}sz')
+        sz.set('width', str(total_width))
+        sz.set('widthRelTo', 'ABSOLUTE')
+        sz.set('height', '51742')
+        sz.set('heightRelTo', 'ABSOLUTE')
+        sz.set('protect', '0')
 
-            # 본문 문단 생성
-            new_paras = md_to_paras(content_lines, CHARPR_BODY, PARAPR_BODY)
+        # pos — treatAsChar=0 (블록 객체, 페이지 넘김 허용)
+        pos = etree.SubElement(new_tbl, f'{{{HP}}}pos')
+        pos.set('treatAsChar', '0')
+        pos.set('affectLSpacing', '0')
+        pos.set('flowWithText', '1')
+        pos.set('allowOverlap', '0')
+        pos.set('holdAnchorAndSO', '0')
+        pos.set('vertRelTo', 'PARA')
+        pos.set('horzRelTo', 'COLUMN')
+        pos.set('vertAlign', 'TOP')
+        pos.set('horzAlign', 'LEFT')
+        pos.set('vertOffset', '0')
+        pos.set('horzOffset', '0')
 
-            if not new_paras:
-                new_paras = [make_para(PARAPR_BODY, [(CHARPR_BODY, "")])]
+        # outMargin
+        om = etree.SubElement(new_tbl, f'{{{HP}}}outMargin')
+        om.set('left', '0')
+        om.set('right', '0')
+        om.set('top', '141')
+        om.set('bottom', '141')
 
-            # 셀 내용 교체
-            replace_cell_content(tc, new_paras, NS)
+        def make_cell(col_addr, row_addr, width, height, border_fill_id):
+            """HWPX 표 셀(tc) 생성"""
+            tc = etree.Element(f'{{{HP}}}tc')
+            tc.set('name', '')
+            tc.set('header', '0')
+            tc.set('hasMargin', '1')
+            tc.set('protect', '0')
+            tc.set('editable', '0')
+            tc.set('dirty', '0')
+            tc.set('colAddr', str(col_addr))
+            tc.set('rowAddr', str(row_addr))
+            tc.set('colSpan', '1')
+            tc.set('rowSpan', '1')
+            tc.set('borderFillIDRef', border_fill_id)
 
-    # 4) 본문 대형 표(표3)의 pageBreak를 CELL로 변경 (페이지 넘김 허용)
-    if len(tables) >= 4:
-        tables[3].set('pageBreak', 'CELL')
+            ca = etree.SubElement(tc, f'{{{HP}}}cellAddr')
+            ca.set('colAddr', str(col_addr))
+            ca.set('rowAddr', str(row_addr))
+
+            csz = etree.SubElement(tc, f'{{{HP}}}cellSz')
+            csz.set('width', str(width))
+            csz.set('height', str(height))
+
+            cm = etree.SubElement(tc, f'{{{HP}}}cellMargin')
+            cm.set('left', '142')
+            cm.set('right', '142')
+            cm.set('top', '425')
+            cm.set('bottom', '425')
+
+            sl = etree.SubElement(tc, f'{{{HP}}}subList')
+            sl.set('id', '0')
+            sl.set('textDirection', 'HORIZONTAL')
+            sl.set('lineWrap', 'BREAK')
+            sl.set('vertAlign', 'CENTER')
+            sl.set('linkListIDRef', '0')
+            sl.set('linkListNextIDRef', '0')
+            sl.set('textWidth', str(width - 284))
+            sl.set('textHeight', str(height - 142))
+
+            return tc, sl
+
+        for ri, (sec_key, title, subtitle) in enumerate(SECTION_LABELS):
+            tr = etree.SubElement(new_tbl, f'{{{HP}}}tr')
+
+            # ── 라벨 셀 (c0) ──
+            label_tc, label_sl = make_cell(0, ri, label_width, row_height, BF_LABEL)
+            # 라벨: 제목 (볼드)
+            p_title = make_para(PARAPR_CENTER, [(CHARPR_BOLD, title)])
+            label_sl.append(p_title)
+            # 빈 줄
+            p_space = make_para(PARAPR_CENTER, [(CHARPR_BODY, "")])
+            label_sl.append(p_space)
+            # 부제
+            for sub_line in subtitle.split('\n'):
+                p_sub = make_para(PARAPR_CENTER, [(CHARPR_BODY, sub_line)])
+                label_sl.append(p_sub)
+
+            tr.append(label_tc)
+
+            # ── 내용 셀 (c1) ──
+            content_tc, content_sl = make_cell(1, ri, content_width, row_height, BF_CONTENT)
+
+            if sec_key in data['sections']:
+                content_paras = md_to_paras(data['sections'][sec_key], CHARPR_BODY, PARAPR_BODY)
+                if not content_paras:
+                    content_paras = [make_para(PARAPR_BODY, [(CHARPR_BODY, "")])]
+            else:
+                content_paras = [make_para(PARAPR_BODY, [(CHARPR_BODY, "")])]
+
+            for p in content_paras:
+                content_sl.append(p)
+
+            tr.append(content_tc)
+
+        # 양식의 표3을 새 표로 교체
+        old_tbl3_parent_run.replace(old_tbl3, new_tbl)
 
     # 5) 전체 문서에서 linesegarray 제거 (한글이 열 때 자동 재계산)
     remove_linesegarray(root, NS)

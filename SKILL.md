@@ -377,7 +377,7 @@ python3 "$SKILL_DIR/scripts/office/unpack.py" document.hwpx ./unpacked/
 | `scripts/text_extract.py` | E | 텍스트 추출 (python-hwpx 필요) |
 | `scripts/create_document.py` | D | Markdown/JSON → HWPX 간편 생성 |
 | `scripts/postprocess_hwpx.py` | A/B | **HWPX 후처리 (필수)** — 표 너비/열 비율, 문단 간격, 빈 줄, 셀 높이 |
-| `scripts/md_to_hwpx_form2.py` | D | **MD → HWPX 서식2(도전적 문제 정의서)** — 레퍼런스 기반 표 구조 복원 + linesegarray 제거 |
+| `scripts/md_to_hwpx_form2.py` | D | **MD → HWPX 서식2(도전적 문제 정의서)** — 양식에서 header/표1/표2만 복사, 본문 표3은 6행×2열 직접 XML 생성 (작성시 고려사항 제거, treatAsChar=0, cellMargin 1.5mm) |
 | `scripts/md_to_docx.py` | — | MD → DOCX 서식1(Concept Paper) 변환 |
 | `scripts/md_to_docx_form2.py` | — | MD → DOCX 서식2(도전적 문제 정의서) 변환 |
 | `scripts/office/unpack.py` | C/E | HWPX → XML 디렉토리 |
