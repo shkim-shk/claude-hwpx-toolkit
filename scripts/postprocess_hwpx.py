@@ -69,6 +69,63 @@ def fix_cell_heights(root):
                         cs.set('height', str(new_height))
 
 
+def fix_title_table_rowspan(root):
+    """제목 표(1열 '제목' 포함) 감지 → 1열 rowSpan=2 행 병합 처리"""
+    for tbl in root.iter(f'{{{HP}}}tbl'):
+        trs = tbl.findall(f'{{{HP}}}tr')
+        if len(trs) != 2:
+            continue
+
+        # 첫 행 첫 셀에 '제목' 텍스트가 있는지 확인
+        first_tc = trs[0].findall(f'{{{HP}}}tc')
+        if not first_tc:
+            continue
+        first_text = get_cell_text(first_tc[0])
+        if '제목' not in first_text:
+            continue
+
+        print(f"    제목 표 행 병합 적용")
+
+        # 1열(colAddr=0): 첫 행 셀의 rowSpan을 2로 변경
+        tc_row0_col0 = first_tc[0]
+        span = tc_row0_col0.find(f'{{{HP}}}cellSpan')
+        if span is not None:
+            span.set('rowSpan', '2')
+
+        # 1열 셀 높이: 두 행의 합산
+        cs_row0 = tc_row0_col0.find(f'{{{HP}}}cellSz')
+        row0_height = int(cs_row0.get('height', '0')) if cs_row0 is not None else 0
+
+        second_tcs = trs[1].findall(f'{{{HP}}}tc')
+        if not second_tcs:
+            continue
+
+        # 2행 1열 셀 높이 확인
+        tc_row1_col0 = second_tcs[0]
+        cs_row1 = tc_row1_col0.find(f'{{{HP}}}cellSz')
+        row1_height = int(cs_row1.get('height', '0')) if cs_row1 is not None else 0
+
+        # 1열 셀 높이를 합산으로 설정
+        total_height = row0_height + row1_height
+        if cs_row0 is not None:
+            cs_row0.set('height', str(total_height))
+
+        # 2행 1열 셀: 빈 셀로 만들고 rowSpan=0 (병합된 셀 표시)
+        # HWPX에서는 병합된 하위 셀을 제거하지 않고 내용만 비움
+        span_row1 = tc_row1_col0.find(f'{{{HP}}}cellSpan')
+        if span_row1 is not None:
+            span_row1.set('rowSpan', '0')
+
+        # 2행 1열 셀의 텍스트 제거
+        sub_list = tc_row1_col0.find(f'{{{HP}}}subList')
+        if sub_list is not None:
+            for p in sub_list.findall(f'{{{HP}}}p'):
+                for run in p.findall(f'{{{HP}}}run'):
+                    t = run.find(f'{{{HP}}}t')
+                    if t is not None:
+                        t.text = ''
+
+
 def is_blank_para(p):
     """문단이 빈 줄(공백/빈 텍스트)인지 판별"""
     texts = []
@@ -311,6 +368,7 @@ def process_hwpx(hwpx_path):
     remove_excess_blank_paras(root)
     fix_tables(root)
     fix_cell_heights(root)
+    fix_title_table_rowspan(root)
     tree.write(section_path, xml_declaration=True, encoding='UTF-8')
 
     # 3. 표 셀 좌측 정렬
