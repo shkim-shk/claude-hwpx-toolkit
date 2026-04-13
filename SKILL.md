@@ -360,7 +360,8 @@ python3 "$SKILL_DIR/scripts/office/unpack.py" document.hwpx ./unpacked/
 12. **빈 줄**: `<hp:t/>` 사용 (self-closing tag)
 13. **linesegarray 제거 (필수)**: 텍스트를 프로그래밍으로 삽입/변경할 때 반드시 `hp:linesegarray`를 모두 제거해야 한다. 이것은 한글의 줄 배치 캐시로, 원본 양식의 빈 셀 캐시가 남아있으면 긴 텍스트가 1줄로 렌더링되면서 **글자가 중첩되는 치명적 현상** 발생. 제거하면 한글이 열 때 자동 재계산. 코드: `for lsa in element.findall('.//hp:linesegarray', ns): lsa.getparent().remove(lsa)`
 14. **표 pageBreak 설정**: 내용이 많아 페이지를 넘어가는 표는 `pageBreak="CELL"`로 설정. `"TABLE"`이면 표 전체가 한 페이지에 안 들어갈 때 잘리거나 다음 페이지로 통째로 넘어감
-15. **공통서식 제안서 제목 표 rowSpan 병합 (필수)**: md2hwpx_improved.py로 공통서식 제안서(Concept Paper)를 생성할 때, 제목 표("제목: 해결하고 싶은 보건의료 분야 난제는?")의 Row0 Cell(0,0)에 반드시 `rowSpan="2"`를 설정하고, Row1의 빈 첫 셀(colAddr=0)을 제거해야 한다. MD 파이프 테이블은 셀 병합을 표현할 수 없어서 3셀×2행으로 변환되지만, 원본 양식은 첫 열이 2행 병합된 3열×2행 구조(열 너비: 9857/5665/30967)이다. 후처리 코드: `cell0.find('hc:cellSpan').set('rowSpan', '2'); row1.remove(row1_cells[0])`
+15. **표 treatAsChar 설정 (필수)**: 표의 `<hp:pos>` 요소에서 반드시 `treatAsChar="0"`으로 설정해야 함. `treatAsChar="1"`이면 표가 글자처럼 취급되어 **페이지 경계에서 분할되지 않고 표가 잘리는 치명적 현상** 발생. `pageBreak="CELL"`이 설정되어 있어도 `treatAsChar="1"`이면 무시됨. md2hwpx_improved.py에서는 이미 `"0"`으로 설정되어 있으나, XML 직접 생성 시 반드시 확인할 것
+16. **공통서식 제안서 제목 표 rowSpan 병합 (필수)**: md2hwpx_improved.py로 공통서식 제안서(Concept Paper)를 생성할 때, 제목 표("제목: 해결하고 싶은 보건의료 분야 난제는?")의 Row0 Cell(0,0)에 반드시 `rowSpan="2"`를 설정하고, Row1의 빈 첫 셀(colAddr=0)을 제거해야 한다. MD 파이프 테이블은 셀 병합을 표현할 수 없어서 3셀×2행으로 변환되지만, 원본 양식은 첫 열이 2행 병합된 3열×2행 구조(열 너비: 9857/5665/30967)이다. 후처리 코드: `cell0.find('hc:cellSpan').set('rowSpan', '2'); row1.remove(row1_cells[0])`
 
 ---
 
